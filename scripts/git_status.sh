@@ -1,48 +1,60 @@
-#!/usr/bin/env bash
+#!/usr/bin/env zsh
 
 PANE_PATH=$(tmux display-message -p -F "#{pane_current_path}")
 cd $PANE_PATH
 
-git_changes() {
-  local changes=$(git diff --shortstat | sed 's/^[^0-9]*\([0-9]*\)[^0-9]*\([0-9]*\)[^0-9]*\([0-9]*\)[^0-9]*/\1;\2;\3/')
-  local changes_array=(${changes//;/ })
-  local untracked=$(git status --porcelain 2>/dev/null| grep -c "^??")
-  local result=()
-  
-  if [[ $untracked != 0 ]]; then
-    result+=("?$untracked")
-  fi
-  if [[ -n ${changes_array[0]} ]]; then
-    result+=("~${changes_array[0]}")
-  fi
-
-  if [[ -n ${changes_array[1]} ]]; then
-    result+=("+${changes_array[1]}")
-  fi
-
-  if [[ -n ${changes_array[2]} ]]; then
-    result+=("-${changes_array[2]}")
-  fi
-
-  local joined=$(printf " %s" "${result[@]}")
-  local joined=${joined:1}
-
-  if [[ -n $joined ]]; then
-    echo "$joined "
-  fi
-}
-
 git_status() {
-  local status=$(git rev-parse --abbrev-ref HEAD)
-  local changes=$(git_changes)
+  update_current_git_vars
+  echo $(git_super_status)
+}
 
-  if [[ -n $status ]]; then
-    printf " $status $changes"
+function update_current_git_vars() {
+  local gitstatus="$HOME/.oh-my-zsh/plugins/git-prompt/gitstatus.py"
+
+  _GIT_STATUS=$(python ${gitstatus} 2>/dev/null)
+
+  __CURRENT_GIT_STATUS=("${(@s: :)_GIT_STATUS}")
+  GIT_BRANCH=$__CURRENT_GIT_STATUS[1]
+  GIT_AHEAD=$__CURRENT_GIT_STATUS[2]
+  GIT_BEHIND=$__CURRENT_GIT_STATUS[3]
+  GIT_STAGED=$__CURRENT_GIT_STATUS[4]
+  GIT_CONFLICTS=$__CURRENT_GIT_STATUS[5]
+  GIT_CHANGED=$__CURRENT_GIT_STATUS[6]
+  GIT_UNTRACKED=$__CURRENT_GIT_STATUS[7]
+  GIT_STASHED=$__CURRENT_GIT_STATUS[8]
+  GIT_CLEAN=$__CURRENT_GIT_STATUS[9]
+}
+
+git_super_status() {
+  if [ -n "$__CURRENT_GIT_STATUS" ]; then
+    STATUS="#[fg=magenta]⎇ #[bold]$GIT_BRANCH#[none]"
+    if [ "$GIT_BEHIND" -ne "0" ]; then
+      STATUS="$STATUS ↓ $GIT_BEHIND"
+    fi
+    if [ "$GIT_AHEAD" -ne "0" ]; then
+      STATUS="$STATUS ↑ $GIT_AHEAD"
+    fi
+    STATUS="$STATUS #[none]|"
+    if [ "$GIT_STAGED" -ne "0" ]; then
+      STATUS="$STATUS #[fg=red]● $GIT_STAGED"
+    fi
+    if [ "$GIT_CONFLICTS" -ne "0" ]; then
+      STATUS="$STATUS #[fg=red]✖ $GIT_CONFLICTS"
+    fi
+    if [ "$GIT_CHANGED" -ne "0" ]; then
+      STATUS="$STATUS #[fg=blue]✚ $GIT_CHANGED"
+    fi
+    if [ "$GIT_UNTRACKED" -ne "0" ]; then
+      STATUS="$STATUS #[fg=cyan]… $GIT_UNTRACKED"
+    fi
+    if [ "$GIT_STASHED" -ne "0" ]; then
+      STATUS="$STATUS #[fg=blue]⚑ $GIT_STASHED"
+    fi
+    if [ "$GIT_CLEAN" -eq "1" ]; then
+      STATUS="$STATUS #[fg=green]✔"
+    fi
+    echo "#[fg=colour248,bg=colour235] $STATUS #[bg=default,fg=default]"
   fi
 }
 
-main() {
-  git_status
-}
-
-main
+git_status
